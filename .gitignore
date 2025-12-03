@@ -1,3 +1,60 @@
-node_modules/
+# Sensitive Configuration
+config.js
+.env
+.env.local
+.env.production
+
+# API Keys and Secrets
+**/apiKeys.json
+**/secrets.json
+
+# Logs
 *.log
+logs/
+bot.log
 trades.csv
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Package Manager
+.pnpm-debug.log*
+package-lock.json
+yarn.lock
+
+# Build Output
+dist/
+build/
+*.tgz
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Backup Files
+*.backup
+*.bak
+*.old
+
+# Temporary Files
+tmp/
+temp/
+*.tmp
+
+# PM2
+.pm2/
+pm2.log
+
+# Archives (don't commit deployment packages)
+*.tar.gz
+*.zip
