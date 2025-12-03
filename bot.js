@@ -11,6 +11,7 @@ const crypto = require("crypto");
 const fs = require("fs");
 const WebSocket = require("ws");
 const config = require("./config");
+const portfolio = require("./portfolio-manager");
 
 // ============================================================================
 // STATE MANAGEMENT
@@ -32,6 +33,7 @@ const state = {
   priceHistory: {},        // Historical prices for indicators
   websockets: {},          // WebSocket connections
   symbolInfo: {},          // Exchange info for lot sizes
+  lastPortfolioRebalance: 0,  // Timestamp of last portfolio rebalance
 };
 
 // ============================================================================
@@ -433,11 +435,20 @@ async function getAccountBalance() {
     const account = await apiWithRetry("/api/v3/account");
     const usd = account.balances.find((b) => b.asset === "USD");
     const usdt = account.balances.find((b) => b.asset === "USDT");
+    const btc = account.balances.find((b) => b.asset === "BTC");
+    const eth = account.balances.find((b) => b.asset === "ETH");
+    const sol = account.balances.find((b) => b.asset === "SOL");
+    const avax = account.balances.find((b) => b.asset === "AVAX");
     
     return {
       usd: parseFloat(usd?.free || 0),
       usdt: parseFloat(usdt?.free || 0),
       total: parseFloat(usd?.free || 0) + parseFloat(usdt?.free || 0),
+      // Crypto holdings for portfolio management
+      btc: parseFloat(btc?.free || 0),
+      eth: parseFloat(eth?.free || 0),
+      sol: parseFloat(sol?.free || 0),
+      avax: parseFloat(avax?.free || 0),
     };
   } catch (err) {
     log("error", `Failed to get account balance: ${err.message}`);
@@ -750,6 +761,84 @@ async function checkExitConditions(symbol, position) {
 }
 
 // ============================================================================
+// PORTFOLIO REBALANCING
+// ============================================================================
+
+async function rebalancePortfolio() {
+  try {
+    log("info", "[Portfolio] Starting rebalancing check...");
+    
+    // Load current portfolio
+    const portfolioData = await portfolio.loadPortfolio(getAccountBalance, getCurrentPrice);
+    if (!portfolioData) {
+      log("warn", "[Portfolio] Failed to load portfolio");
+      return;
+    }
+    
+    // Log portfolio status
+    portfolio.logPortfolioStatus(portfolioData);
+    
+    // Check existing holdings for sell signals
+    for (const [asset, holding] of Object.entries(portfolioData.holdings)) {
+      const sellCheck = await portfolio.shouldSellHolding(asset, holding, analyzeAllStrategies);
+      
+      if (sellCheck.shouldSell) {
+        log("info", `[Portfolio] Selling ${asset}: ${sellCheck.reason}`);
+        await executeSell(holding.pair, holding.quantity, sellCheck.reason, sellCheck.strategy);
+        await sleep(500);
+      }
+    }
+    
+    // Reload portfolio after potential sells
+    const updatedPortfolio = await portfolio.loadPortfolio(getAccountBalance, getCurrentPrice);
+    if (!updatedPortfolio) return;
+    
+    // Check if we need to raise cash (below minimum reserve)
+    if (portfolio.needsCashRebalance(updatedPortfolio)) {
+      const cashToRaise = portfolio.calculateCashToRaise(updatedPortfolio);
+      log("info", `[Portfolio] Need to raise $${cashToRaise.toFixed(2)} cash (below minimum reserve)`);
+      
+      // Find weakest holding to sell
+      const weakest = portfolio.findWeakestHolding(updatedPortfolio);
+      if (weakest) {
+        const holding = updatedPortfolio.holdings[weakest];
+        log("info", `[Portfolio] Selling ${weakest} to raise cash`);
+        await executeSell(holding.pair, holding.quantity, "CASH_RESERVE", "portfolio");
+        await sleep(500);
+      }
+    }
+    
+    // Check if we have excess cash to deploy
+    else if (portfolio.hasExcessCash(updatedPortfolio)) {
+      const excessCash = portfolio.calculateExcessCash(updatedPortfolio);
+      log("info", `[Portfolio] Excess cash: $${excessCash.toFixed(2)} available for deployment`);
+      
+      // Scan all pairs for buy signals
+      for (const pair of config.tradingPairs) {
+        if (state.positions[pair]) continue; // Skip if already have position
+        
+        const analyses = await analyzeAllStrategies(pair);
+        const strongestSignal = portfolio.findStrongestBuySignal(analyses);
+        
+        if (strongestSignal && strongestSignal.buySignal) {
+          // Use excess cash for this trade
+          const tradeSize = Math.min(excessCash * 0.5, excessCash); // Use up to 50% of excess
+          if (tradeSize >= config.risk.minTradeSize) {
+            log("info", `[Portfolio] Deploying excess cash: ${pair} (${strongestSignal.strategy})`);
+            await executeBuy(pair, tradeSize, strongestSignal.strategy);
+            break; // Only one trade per rebalance
+          }
+        }
+      }
+    }
+    
+    log("info", "[Portfolio] Rebalancing complete");
+  } catch (err) {
+    log("error", `[Portfolio] Rebalancing failed: ${err.message}`);
+  }
+}
+
+// ============================================================================
 // MAIN TRADING LOOP
 // ============================================================================
 
@@ -780,6 +869,15 @@ async function scanMarkets() {
   }
 
   log("info", "Scanning markets with all strategies...");
+
+  // Portfolio rebalancing (if enabled)
+  if (config.portfolio.enabled) {
+    const timeSinceRebalance = (Date.now() - state.lastPortfolioRebalance) / 1000;
+    if (timeSinceRebalance >= config.portfolio.rebalanceInterval) {
+      await rebalancePortfolio();
+      state.lastPortfolioRebalance = Date.now();
+    }
+  }
 
   for (const symbol of Object.keys(state.positions)) {
     await checkExitConditions(symbol, state.positions[symbol]);

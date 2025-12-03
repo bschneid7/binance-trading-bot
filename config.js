@@ -105,4 +105,19 @@ module.exports = {
     logFile: "bot.log",
     tradeLogFile: "trades.csv",
   },
+
+  // ============================================================================
+  // PORTFOLIO REBALANCING
+  // ============================================================================
+  portfolio: {
+    enabled: true,             // Enable portfolio management
+    minCashReserve: 0.20,      // 20% minimum cash (safety buffer)
+    targetCashReserve: 0.25,   // 25% target cash (ideal allocation)
+    maxCashReserve: 0.40,      // 40% maximum cash (deploy excess)
+    rebalanceInterval: 300,     // Rebalance every 5 minutes (300 seconds)
+    minPositionSize: 0.05,      // 5% minimum per asset (sell if below)
+    maxPositionSize: 0.30,      // 30% maximum per asset (rebalance if above)
+    sellOnSignal: true,         // Sell existing holdings on sell signals
+    maintainReserve: true,      // Always maintain minimum cash reserve
+  },
 };
