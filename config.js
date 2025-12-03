@@ -74,11 +74,11 @@ module.exports = {
   // RISK MANAGEMENT
   // ============================================================================
   risk: {
-    maxPositionSize: 0.20,     // Use 20% of available balance per trade (allows 4-5 positions per currency)
+    maxPositionSize: 0.35,     // Use 35% of available balance per trade - AGGRESSIVE (allows 2-3 positions per currency)
     minTradeSize: 10,          // Minimum $10 per trade
     maxDailyLoss: 100,         // Stop trading if daily loss exceeds $100
-    maxOpenPositions: 8,       // Max 8 positions total (4 USD + 4 USDT pairs)
-    maxPositionsPerStrategy: 4, // Max 4 positions per strategy (2 USD + 2 USDT)
+    maxOpenPositions: 12,      // Max 12 positions total (6 USD + 6 USDT pairs) - AGGRESSIVE
+    maxPositionsPerStrategy: 6, // Max 6 positions per strategy (3 USD + 3 USDT) - AGGRESSIVE
     minHoldTime: 300,          // Minimum 5 minutes (300 seconds) before selling - prevents overtrading
   },
 
@@ -111,10 +111,10 @@ module.exports = {
   // ============================================================================
   portfolio: {
     enabled: true,             // Enable portfolio management
-    minCashReserve: 0.20,      // 20% minimum cash (safety buffer)
-    targetCashReserve: 0.25,   // 25% target cash (ideal allocation)
-    maxCashReserve: 0.40,      // 40% maximum cash (deploy excess)
-    rebalanceInterval: 300,     // Rebalance every 5 minutes (300 seconds)
+    minCashReserve: 0.10,      // 10% minimum cash - AGGRESSIVE
+    targetCashReserve: 0.12,   // 12% target cash - AGGRESSIVE
+    maxCashReserve: 0.15,      // 15% maximum cash - AGGRESSIVE (deploy more)
+    rebalanceInterval: 120,     // Rebalance every 2 minutes (120 seconds) - AGGRESSIVE
     minPositionSize: 0.05,      // 5% minimum per asset (sell if below)
     maxPositionSize: 0.30,      // 30% maximum per asset (rebalance if above)
     sellOnSignal: true,         // Sell existing holdings on sell signals

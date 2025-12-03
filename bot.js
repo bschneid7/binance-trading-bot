@@ -839,6 +839,28 @@ async function rebalancePortfolio() {
 }
 
 // ============================================================================
+// SIGNAL AGGREGATION & CONFIRMATION
+// ============================================================================
+
+function aggregateSignals(pair, analyses) {
+  const buySignals = analyses.filter(a => a.buySignal);
+  const sellSignals = analyses.filter(a => a.sellSignal);
+  
+  const buyConfidence = buySignals.length / analyses.length;
+  const sellConfidence = sellSignals.length / analyses.length;
+  
+  return {
+    buyConfidence,
+    sellConfidence,
+    strongBuy: buySignals.length >= 2, // Require 2+ strategies to agree
+    strongSell: sellSignals.length >= 2,
+    buyStrategies: buySignals.map(s => s.strategy),
+    sellStrategies: sellSignals.map(s => s.strategy),
+    indicators: buySignals.length > 0 ? buySignals[0].indicators : {},
+  };
+}
+
+// ============================================================================
 // MAIN TRADING LOOP
 // ============================================================================
 
@@ -897,17 +919,23 @@ async function scanMarkets() {
 
     const analyses = await analyzeAllStrategies(pair);
     
-    for (const analysis of analyses) {
-      if (!analysis.buySignal) continue;
-
-      const strategyPositions = Object.values(state.positions).filter(
-        p => p.strategy === analysis.strategy
-      ).length;
-      
-      if (strategyPositions >= config.risk.maxPositionsPerStrategy) {
-        log("debug", `Max positions reached for ${analysis.strategy}`);
-        continue;
-      }
+    // Aggregate signals for multi-indicator confirmation
+    const signalAgg = aggregateSignals(pair, analyses);
+    
+    // Only trade if 2+ strategies agree (AGGRESSIVE OPTIMIZATION)
+    if (!signalAgg.strongBuy) {
+      continue; // Skip if not enough confirmation
+    }
+    
+    // Use the combined strategy name
+    const combinedStrategy = signalAgg.buyStrategies.join('+');
+    
+    // Check if we can open more positions
+    const totalPositions = Object.keys(state.positions).length;
+    if (totalPositions >= config.risk.maxOpenPositions) {
+      log("debug", `Max total positions reached: ${totalPositions}`);
+      continue;
+    }
 
       // Determine which currency this pair uses
       const isUSDT = pair.endsWith('USDT');
@@ -926,14 +954,13 @@ async function scanMarkets() {
       );
 
       if (tradeSize >= config.risk.minTradeSize && availableBalance >= config.risk.minTradeSize) {
-        log("info", `BUY SIGNAL: ${pair} (${analysis.strategy}) - ${JSON.stringify(analysis.indicators)}`);
-        await executeBuy(pair, tradeSize, analysis.strategy);
+        log("info", `BUY SIGNAL: ${pair} (${combinedStrategy}) - Confidence: ${(signalAgg.buyConfidence * 100).toFixed(0)}% - ${JSON.stringify(signalAgg.indicators)}`);
+        await executeBuy(pair, tradeSize, combinedStrategy);
         break;
       }
-    }
-
-    await sleep(500);
   }
+  
+  await sleep(500);
 
   log("info", `Scan complete. Positions: ${Object.keys(state.positions).length}, Daily P&L: $${state.dailyPnL.toFixed(2)}`);
   for (const [strategy, stats] of Object.entries(state.strategyStats)) {
