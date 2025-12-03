@@ -1,0 +1,36 @@
+{
+  "name": "binance-multi-strategy-trading-bot",
+  "version": "2.1.0",
+  "description": "Production-ready Binance US trading bot with 4 proven technical analysis strategies and WebSocket support",
+  "main": "bot.js",
+  "scripts": {
+    "start": "node bot.js",
+    "install-deps": "npm install ws",
+    "pm2:start": "pm2 start ecosystem.config.js",
+    "pm2:stop": "pm2 stop trading-bot",
+    "pm2:restart": "pm2 restart trading-bot",
+    "pm2:logs": "pm2 logs trading-bot",
+    "pm2:status": "pm2 status"
+  },
+  "keywords": [
+    "binance",
+    "trading",
+    "bot",
+    "cryptocurrency",
+    "automated-trading",
+    "multi-strategy",
+    "websocket",
+    "rsi",
+    "macd",
+    "bollinger-bands",
+    "ema"
+  ],
+  "author": "Bryan",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "ws": "^8.14.2"
+  }
+}
